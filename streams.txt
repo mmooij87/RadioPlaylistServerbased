@@ -1,5 +1,6 @@
-// streams.txt
-// Format: name|url|description
-// Voeg nieuwe streams toe door een nieuwe regel toe te voegen in hetzelfde formaat
-
-KINK|https://playerservices.streamtheworld.com/api/livestream-redirect/KINK.mp3|KINK No Alternative
+KINK|https://22343.live.streamtheworld.com:443/KINK.mp3|KINK Radio - Modern Rock
+NPO Radio 2|https://icecast.omroep.nl/radio2-bb-mp3|NPO Radio 2 - De Grootste Hits en Het Beste van Nu
+Radio 538|https://21253.live.streamtheworld.com/RADIO538.mp3|Radio 538 - The Beat of The Netherlands
+Sky Radio|https://19993.live.streamtheworld.com/SKYRADIO.mp3|Sky Radio - The Relaxing Music Mix
+Radio 10|https://20873.live.streamtheworld.com/RADIO10.mp3|Radio 10 - De Grootste Hits Aller Tijden
+NPO 3FM|https://icecast.omroep.nl/3fm-bb-mp3|NPO 3FM - Alternative
