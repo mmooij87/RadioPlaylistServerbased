@@ -15,35 +15,31 @@ const METADATA_CHECK_INTERVAL = 5000; // Check metadata every 5 seconds
 const HISTORY_LIMIT = 50; // Keep last 50 tracks in memory per station
 
 // Spotify API configuration - **MUST be set as Environment Variables on Render**
-const SPOTIFY_CLIENT_ID = process.env.SPOTIFY_CLIENT_ID; // || 'YOUR_FALLBACK_ID' // Fallbacks removed - rely on ENV vars
-const SPOTIFY_CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET; // || 'YOUR_FALLBACK_SECRET'
+const SPOTIFY_CLIENT_ID = process.env.SPOTIFY_CLIENT_ID;
+const SPOTIFY_CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET;
 
 // Default Album Art (SVG)
 const DEFAULT_ALBUM_ART = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iIzU1NSI+PHBhdGggZD0iTTEyIDJDNi40OCAyIDIgNi40OCAyIDEyczQuNDggMTAgMTAgMTAgMTAtNC40OCAxMC0xMFMxNy41MiAyIDEyIDJ6bTAgMTQuNWMtMi40OSAwLTQuNS0yLjAxLTQuNS00LjVTOS41MSA3LjUgMTIgNy41czQuNSAyLjAxIDQuNSA0LjUtMi4wMSA0LjUtNC41IDQuNXptMC01LjVjLS41NSAwLTEgLjQ1LTEgMXMuNDUgMSAxIDEgMS0uNDUgMS0xLS40NS0xLTEtMXoiLz48L3N2Zz4=';
 
 // --- Database Setup ---
+// ***************************************************************
+// *** Use /tmp for ephemeral storage on Render Free Tier     ***
+// *** WARNING: Database file will be LOST on every restart!   ***
+// ***************************************************************
 const dbPath = process.env.NODE_ENV === 'production'
-  ? '/var/data/radio_history.db' // Use persistent disk on Render (create disk first)
-  // ? '/tmp/radio_history.db' // Alternative: Use ephemeral storage on Render
+  ? '/tmp/radio_history.db' // Use ephemeral storage in /tmp
   : path.join(__dirname, 'radio_history.db'); // Local development path
 
-// Ensure directory exists for persistent disk path
-if (process.env.NODE_ENV === 'production' && dbPath.startsWith('/var/data')) {
-    const dbDir = path.dirname(dbPath);
-    if (!fs.existsSync(dbDir)) {
-        console.log(`Creating database directory: ${dbDir}`);
-        fs.mkdirSync(dbDir, { recursive: true });
-    }
-}
+// No need to create /tmp, it should exist and be writable.
+// The sqlite3 library will create the .db file inside it if it doesn't exist.
 
 const db = new sqlite3.Database(dbPath, (err) => {
   if (err) {
     console.error('Error opening database:', err.message);
-    console.error(`Database path: ${dbPath}`);
-    // Consider exiting if DB connection fails critically
-    // process.exit(1);
+    console.error(`Database path used: ${dbPath}`);
   } else {
     console.log(`Connected to SQLite database at ${dbPath}`);
+    console.warn(`WARNING: Using ephemeral storage at ${dbPath}. Database will be lost on restarts/deploys.`);
     initDatabase(); // Initialize schema after connection
   }
 });
@@ -67,7 +63,6 @@ if (SPOTIFY_CLIENT_ID && SPOTIFY_CLIENT_SECRET) {
 const app = express();
 app.use(cors());
 app.use(express.static('public'));
-// app.use(express.json()); // Only needed if you have POST endpoints accepting JSON
 
 const server = http.createServer(app);
 const io = socketIo(server, {
@@ -194,7 +189,7 @@ async function getValidSpotifyApi() {
 async function getSpotifyData(artist, title) {
     const currentSpotifyApi = await getValidSpotifyApi();
     if (!currentSpotifyApi) {
-        console.log('Spotify API not available or token invalid, skipping Spotify search.');
+        // console.log('Spotify API not available or token invalid, skipping Spotify search.'); // Less verbose
         return { albumArt: DEFAULT_ALBUM_ART, spotifyUrl: null };
     }
 
@@ -208,7 +203,7 @@ async function getSpotifyData(artist, title) {
     }
 
     const query = `track:${cleanTitle} artist:${cleanArtist}`;
-    console.log(`Searching Spotify with query: ${query}`);
+    // console.log(`Searching Spotify with query: ${query}`); // Less verbose
 
     try {
         const searchResult = await currentSpotifyApi.searchTracks(query, { limit: 1 });
@@ -217,19 +212,10 @@ async function getSpotifyData(artist, title) {
             const track = searchResult.body.tracks.items[0];
             const albumImage = track.album?.images?.[0]?.url || DEFAULT_ALBUM_ART;
             const spotifyUrl = track.external_urls?.spotify || null;
-            console.log(`Spotify match found: Art=${albumImage !== DEFAULT_ALBUM_ART}, URL=${!!spotifyUrl}`);
+            // console.log(`Spotify match found: Art=${albumImage !== DEFAULT_ALBUM_ART}, URL=${!!spotifyUrl}`); // Less verbose
             return { albumArt: albumImage, spotifyUrl: spotifyUrl };
         } else {
-            console.log('No direct Spotify match found.');
-             // Optional: Try broader search if needed (can sometimes yield less accurate results)
-             /*
-             const broadQuery = `${cleanTitle} ${cleanArtist}`;
-             console.log(`Trying broader Spotify search: ${broadQuery}`);
-             const broadResult = await currentSpotifyApi.searchTracks(broadQuery, { limit: 1 });
-             if (broadResult.body.tracks && broadResult.body.tracks.items.length > 0) {
-                // ... extract data ...
-             }
-             */
+             // console.log('No direct Spotify match found.'); // Less verbose
         }
     } catch (error) {
         console.error(`Error searching Spotify for "${query}":`, error.message || error);
@@ -241,7 +227,7 @@ async function getSpotifyData(artist, title) {
     }
 
     // If search fails or yields no results
-    console.log('Spotify search failed or no results, returning defaults.');
+    // console.log('Spotify search failed or no results, returning defaults.'); // Less verbose
     return { albumArt: DEFAULT_ALBUM_ART, spotifyUrl: null };
 }
 
@@ -251,7 +237,7 @@ function saveMetadataToDatabase(stationName, metadata) {
 
   // Basic validation
   if (!artist || !title || artist === 'Loading...' || title === 'Waiting for stream info...') {
-      console.log(`Skipping DB save for incomplete metadata: ${stationName} - ${artist} - ${title}`);
+      // console.log(`Skipping DB save for incomplete metadata: ${stationName} - ${artist} - ${title}`); // Less verbose
       return;
   }
 
@@ -275,43 +261,36 @@ function initRadioStation(name, url) {
   try {
     const radioStation = new Parser({
       url: url,
-      userAgent: 'RadioPlaylistTracker/1.0 (github.com/YOUR_USERNAME/YOUR_REPO)', // Be a good citizen
-      keepListen: false, // **CRITICAL CHANGE: Only fetch metadata, not audio**
-      autoUpdate: true, // Keep trying to connect/reconnect
-      metadataInterval: METADATA_CHECK_INTERVAL / 1000 // Interval in seconds
+      userAgent: 'RadioPlaylistTracker/1.0 (github.com/mmooij87/RadioPlaylistServerbased)',
+      keepListen: false,
+      autoUpdate: true,
+      metadataInterval: METADATA_CHECK_INTERVAL / 1000
     });
 
     // --- Metadata Event ---
     radioStation.on('metadata', async (metadata) => {
       const streamTitle = metadata.get('StreamTitle');
-      // console.log(`Raw metadata for ${name}: ${streamTitle}`); // Debugging
 
       if (streamTitle) {
-        // Basic parsing: "Artist - Title"
         const parts = streamTitle.split(' - ');
         if (parts.length >= 2) {
           const artist = parts[0].trim();
           const title = parts.slice(1).join(' - ').trim();
 
-          // Avoid processing empty strings after trimming
           if (!artist || !title) {
-            console.log(`Skipping metadata for ${name} due to empty artist/title after parsing: "${streamTitle}"`);
+            // console.log(`Skipping metadata for ${name} due to empty artist/title after parsing: "${streamTitle}"`); // Less verbose
             return;
           }
 
-          // Check if it's the same as the current track to avoid redundant processing
           const current = radioStations[name]?.currentMetadata;
           if (current && current.artist === artist && current.title === title) {
-            // console.log(`Metadata for ${name} hasn't changed: ${artist} - ${title}`); // Debugging
-            return; // Same track, do nothing
+            return; // Same track
           }
 
           console.log(`New track detected for ${name}: ${artist} - ${title}`);
 
-          // Get Spotify data (Art and URL)
           const { albumArt, spotifyUrl } = await getSpotifyData(artist, title);
 
-          // Prepare new metadata object
           const newMetadata = {
             artist,
             title,
@@ -320,57 +299,33 @@ function initRadioStation(name, url) {
             spotifyUrl
           };
 
-          // Update state
           radioStations[name].currentMetadata = newMetadata;
-
-          // Add to in-memory history (recent tracks)
           radioStations[name].history.unshift(newMetadata);
-          // Limit history size
           if (radioStations[name].history.length > HISTORY_LIMIT) {
-            radioStations[name].history = radioStations[name].history.slice(0, HISTORY_LIMIT);
+            radioStations[name].history.pop(); // More efficient than slice for removing last element
           }
 
-          // Save to persistent database
           saveMetadataToDatabase(name, newMetadata);
 
-          // Emit update to all connected clients via Socket.IO
-          io.emit('metadataUpdate', { // Using 'metadataUpdate'
-            station: name,
-            metadata: newMetadata
-          });
-          // Emit history update specific to this station (optional, frontend needs to handle)
-           io.emit('historyUpdate', {
-               station: name,
-               history: radioStations[name].history
-           });
-
+          io.emit('metadataUpdate', { station: name, metadata: newMetadata });
+          io.emit('historyUpdate', { station: name, history: radioStations[name].history });
 
         } else {
-          // Handle cases where parsing fails (e.g., ads, different format)
-          console.log(`Could not parse metadata for ${name}: "${streamTitle}"`);
-           // Option: Update title to raw streamTitle if parsing fails?
-           // radioStations[name].currentMetadata = { ...createDefaultMetadata(name), title: streamTitle };
-           // io.emit('metadataUpdate', { station: name, metadata: radioStations[name].currentMetadata });
+          // console.log(`Could not parse metadata for ${name}: "${streamTitle}"`); // Less verbose
         }
       } else {
-         console.log(`Received empty metadata for ${name}`);
+         // console.log(`Received empty metadata for ${name}`); // Less verbose
       }
     });
 
     // --- Error Event ---
     radioStation.on('error', (error) => {
       console.error(`Parser error for station ${name} (${url}):`, error.message || error);
-      // Maybe update status to show error? Don't insert dummy track data.
-      // radioStations[name].currentMetadata = { ...createDefaultMetadata(name), title: "Stream Error" };
-      // io.emit('metadataUpdate', { station: name, metadata: radioStations[name].currentMetadata });
     });
 
      // --- Stream Event (Optional Info) ---
      radioStation.on('stream', (stream) => {
-        console.log(`Connected to stream for ${name}`);
-        // Since keepListen: false, this stream object won't contain audio data,
-        // but you could potentially read headers from it if needed.
-        // stream.destroy(); // Good practice to ensure resources are freed if not used
+        // console.log(`Connected to stream for ${name}`); // Less verbose
      });
 
     return radioStation; // Return the parser instance
@@ -385,28 +340,22 @@ function initRadioStation(name, url) {
 async function initialize() {
   console.log("Initializing application...");
 
-  // 1. Load streams from config file
   radioStations = loadStreams();
   if (Object.keys(radioStations).length === 0) {
       console.error("Initialization failed: No streams loaded. Check streams.txt.");
-      return; // Stop initialization if no streams
+      return;
   }
 
-
-  // 2. Refresh Spotify token initially (if configured)
   if (spotifyApi) {
     await refreshSpotifyToken();
   }
 
-  // 3. Initialize parsers for all loaded stations
   Object.entries(radioStations).forEach(([name, stationData]) => {
     const parserInstance = initRadioStation(name, stationData.url);
     if (parserInstance) {
-      radioStations[name].parser = parserInstance; // Store the parser instance
+      radioStations[name].parser = parserInstance;
     } else {
-        // Handle failed parser initialization if needed (e.g., remove station)
         console.warn(`Parser could not be created for station ${name}. It will be unavailable.`);
-        // delete radioStations[name]; // Optionally remove it
     }
   });
 
@@ -423,45 +372,39 @@ app.get('/proxy-stream/:stationName', (req, res) => {
     return res.status(404).send('Station not found');
   }
 
-  console.log(`Proxying stream for: ${stationName} (${stationData.url})`);
+  // console.log(`Proxying stream for: ${stationName} (${stationData.url})`); // Less verbose
 
   const streamUrl = stationData.url;
   const protocol = streamUrl.startsWith('https') ? https : http;
 
   const proxyRequest = protocol.get(streamUrl, {
-      headers: { 'User-Agent': 'RadioPlaylistTracker/1.0 Proxy' } // Identify proxy
+      headers: { 'User-Agent': 'RadioPlaylistTracker/1.0 Proxy' }
   }, (streamResponse) => {
-    // Check status code from the source stream
     if (streamResponse.statusCode !== 200) {
         console.error(`Proxy error for ${stationName}: Source stream returned status ${streamResponse.statusCode}`);
         res.status(streamResponse.statusCode || 502).send('Error fetching stream source');
-        streamResponse.resume(); // Consume data to free resources
+        streamResponse.resume();
         return;
     }
 
-    // Forward relevant headers from the source stream to the client
     res.writeHead(streamResponse.statusCode, {
-      'Content-Type': streamResponse.headers['content-type'] || 'audio/mpeg', // Default to mpeg if missing
+      'Content-Type': streamResponse.headers['content-type'] || 'audio/mpeg',
       'Cache-Control': 'no-cache',
-      // Add any other headers you want to forward, e.g., 'icy-metaint' if needed
     });
 
-    // Pipe the source stream data directly to the client response
     streamResponse.pipe(res);
 
-    // Handle errors during piping
      streamResponse.on('error', (err) => {
         console.error(`Proxy source stream error for ${stationName}:`, err.message);
-        if (!res.headersSent) { // Check if headers were already sent
+        if (!res.headersSent) {
             res.status(500).send('Stream source error');
         } else {
-            res.end(); // End the response if headers were sent
+            res.end();
         }
      });
 
   });
 
-  // Handle errors connecting to the source stream URL
   proxyRequest.on('error', (err) => {
     console.error(`Proxy connection error for ${stationName} (${streamUrl}):`, err.message);
     if (!res.headersSent) {
@@ -471,17 +414,14 @@ app.get('/proxy-stream/:stationName', (req, res) => {
     }
   });
 
-   // Handle client closing the connection prematurely
    req.on('close', () => {
-    console.log(`Client disconnected from proxy for ${stationName}. Aborting source request.`);
-    proxyRequest.destroy(); // Terminate the connection to the source stream
+    // console.log(`Client disconnected from proxy for ${stationName}. Aborting source request.`); // Less verbose
+    proxyRequest.destroy();
    });
 });
 
 
 // --- API Routes ---
-
-// Serve frontend
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
@@ -489,13 +429,11 @@ app.get('/handleiding', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'handleiding.html'));
 });
 
-// Get list of available stations and their basic info
 app.get('/api/stations', (req, res) => {
   try {
     const stationList = Object.entries(radioStations).map(([name, station]) => ({
       name,
       description: station.description,
-      // url: station.url // Maybe don't expose raw URL if always using proxy
     }));
     res.json(stationList);
   } catch (error) {
@@ -504,8 +442,6 @@ app.get('/api/stations', (req, res) => {
   }
 });
 
-// Get current metadata for one or all stations
-// Adjusted path to match frontend expectation after changes
 app.get('/api/metadata/current/:stationName?', (req, res) => {
   try {
     const stationName = req.params.stationName;
@@ -516,7 +452,6 @@ app.get('/api/metadata/current/:stationName?', (req, res) => {
         res.status(404).json({ error: `Station '${stationName}' not found` });
       }
     } else {
-      // Return current metadata for all stations
       const allCurrentMetadata = {};
       Object.entries(radioStations).forEach(([name, station]) => {
         allCurrentMetadata[name] = station.currentMetadata;
@@ -529,8 +464,6 @@ app.get('/api/metadata/current/:stationName?', (req, res) => {
   }
 });
 
-// Get recent in-memory history for one or all stations
-// This provides the data for the "Recente Nummers" tab
 app.get('/api/metadata/history/:stationName?', (req, res) => {
   try {
     const stationName = req.params.stationName;
@@ -541,7 +474,6 @@ app.get('/api/metadata/history/:stationName?', (req, res) => {
         res.status(404).json({ error: `Station '${stationName}' not found` });
       }
     } else {
-      // Return in-memory history for all stations
       const allMemoryHistory = {};
       Object.entries(radioStations).forEach(([name, station]) => {
         allMemoryHistory[name] = station.history;
@@ -555,11 +487,9 @@ app.get('/api/metadata/history/:stationName?', (req, res) => {
 });
 
 
-// Get full history from the database
-// Adjusted path to match frontend expectation after changes
 app.get('/api/metadata/database/:stationName?', (req, res) => {
     const stationName = req.params.stationName;
-    const limit = parseInt(req.query.limit || '100', 10); // Allow limit via query param
+    const limit = parseInt(req.query.limit || '100', 10);
 
     let query = 'SELECT id, station, artist, title, timestamp, albumArt, spotifyUrl FROM history';
     let params = [];
@@ -578,59 +508,42 @@ app.get('/api/metadata/database/:stationName?', (req, res) => {
     db.all(query, params, (err, rows) => {
         if (err) {
             console.error('Database query error in /api/metadata/database:', err.message);
-            res.status(500).json({ error: 'Database query error' });
+            // Don't crash, but inform the user the DB part isn't working
+            // This might happen if the /tmp file was just cleared
+            res.status(500).json({ error: `Database query error: ${err.message}. History may be temporarily unavailable.` });
         } else {
             res.json(rows);
         }
     });
 });
 
-// Health check endpoint
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
     totalStationsConfigured: Object.keys(radioStations).length,
-    // Could add more checks here (DB connection, Spotify status etc.)
   });
 });
 
 // --- Socket.IO Connection Handling ---
 io.on('connection', (socket) => {
-  console.log(`Client connected: ${socket.id}`);
+  // console.log(`Client connected: ${socket.id}`); // Less verbose
 
-  // Send current state for all stations to the newly connected client
   Object.entries(radioStations).forEach(([name, stationData]) => {
-    // Send current metadata
-    socket.emit('metadataUpdate', {
-      station: name,
-      metadata: stationData.currentMetadata
-    });
-     // Send current recent history
-     socket.emit('historyUpdate', {
-        station: name,
-        history: stationData.history
-     });
+    socket.emit('metadataUpdate', { station: name, metadata: stationData.currentMetadata });
+    socket.emit('historyUpdate', { station: name, history: stationData.history });
   });
 
   socket.on('disconnect', () => {
-    console.log(`Client disconnected: ${socket.id}`);
+    // console.log(`Client disconnected: ${socket.id}`); // Less verbose
   });
 
-  // Allow client to request a refresh (sends current data again)
   socket.on('requestUpdate', (stationName) => {
-    console.log(`Client ${socket.id} requested update for ${stationName || 'all stations'}`);
+    // console.log(`Client ${socket.id} requested update for ${stationName || 'all stations'}`); // Less verbose
     if (stationName && radioStations[stationName]) {
-        socket.emit('metadataUpdate', {
-            station: stationName,
-            metadata: radioStations[stationName].currentMetadata
-        });
-         socket.emit('historyUpdate', {
-            station: stationName,
-            history: radioStations[stationName].history
-         });
+        socket.emit('metadataUpdate', { station: stationName, metadata: radioStations[stationName].currentMetadata });
+        socket.emit('historyUpdate', { station: name, history: radioStations[name].history }); // BugFix: use correct name variable
     } else {
-      // Send all data again if specific station not found or not specified
       Object.entries(radioStations).forEach(([name, stationData]) => {
         socket.emit('metadataUpdate', { station: name, metadata: stationData.currentMetadata });
         socket.emit('historyUpdate', { station: name, history: stationData.history });
@@ -640,9 +553,8 @@ io.on('connection', (socket) => {
 });
 
 // --- Start Server ---
-// Use an async IIFE to ensure initialization completes before listening
 (async () => {
-    await initialize(); // Wait for streams and Spotify to initialize
+    await initialize();
     server.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 Server listening on http://0.0.0.0:${PORT}`);
     });
@@ -656,33 +568,21 @@ process.on('SIGTERM', () => handleShutdown('SIGTERM'));
 function handleShutdown(signal) {
   console.log(`\nReceived ${signal}. Shutting down gracefully...`);
 
-  // 1. Stop accepting new connections
   server.close((err) => {
-      if (err) {
-          console.error("Error closing server:", err);
-      } else {
-          console.log("HTTP server closed.");
-      }
+      if (err) console.error("Error closing server:", err);
+      else console.log("HTTP server closed.");
 
-      // 2. Close Database connection
       db.close((dbErr) => {
-          if (dbErr) {
-              console.error('Error closing database:', dbErr.message);
-          } else {
-              console.log('Database connection closed.');
-          }
-
-          // 3. Optional: Stop parsers (icecast-parser doesn't have explicit stop method)
-          // You might want to remove listeners if necessary, but usually closing the app is sufficient.
+          if (dbErr) console.error('Error closing database:', dbErr.message);
+          else console.log('Database connection closed.');
 
           console.log("Shutdown complete.");
-          process.exit(err || dbErr ? 1 : 0); // Exit with error code if any shutdown step failed
+          process.exit(err || dbErr ? 1 : 0);
       });
   });
 
-   // Force close after a timeout if graceful shutdown hangs
    setTimeout(() => {
     console.error("Graceful shutdown timed out. Forcing exit.");
     process.exit(1);
-  }, 10000); // 10 seconds timeout
+  }, 10000);
 }
