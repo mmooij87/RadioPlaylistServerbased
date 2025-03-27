@@ -21,7 +21,8 @@
     "socket.io": "^4.7.2",
     "icecast-parser": "^4.0.2",
     "spotify-web-api-node": "^5.0.2",
-    "sqlite3": "^5.1.6"
+    "sqlite3": "^5.1.6",
+    "axios": "^1.6.2"
   },
   "engines": {
     "node": ">=14.0.0"

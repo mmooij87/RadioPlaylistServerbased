@@ -1,182 +1,307 @@
-// Integratie van album art service met de main applicatie
-document.addEventListener('DOMContentLoaded', function() {
-    // Referenties naar DOM elementen
-    const audioElement = document.getElementById('audio-player');
-    const playButton = document.getElementById('play-button');
-    const stopButton = document.getElementById('stop-button');
-    const currentTitle = document.getElementById('current-title');
-    const currentArtist = document.getElementById('current-artist');
-    const currentAlbumArt = document.getElementById('current-album-art');
-    const playlistContainer = document.getElementById('playlist-container');
+// Dit bestand moet worden toegevoegd aan de public/js map
+// Bestandsnaam: main.js
+
+document.addEventListener('DOMContentLoaded', () => {
+    // Configuratie
+    const API_BASE_URL = window.location.origin;
+    let currentStation = null;
+    let stations = [];
     
-    // Animeer de equalizer bars
-    const equalizerBars = document.querySelectorAll('.equalizer .bar');
-    function animateEqualizer() {
-        equalizerBars.forEach(bar => {
-            const height = Math.floor(Math.random() * 80) + 20 + '%';
-            bar.style.height = height;
-        });
-    }
+    // DOM elementen
+    const albumArtElement = document.getElementById('albumArt');
+    const trackTitleElement = document.getElementById('trackTitle');
+    const trackArtistElement = document.getElementById('trackArtist');
+    const timestampElement = document.getElementById('timestamp');
+    const audioPlayerElement = document.getElementById('audioPlayer');
+    const audioSourceElement = document.getElementById('audioSource');
+    const spotifyLinkElement = document.getElementById('spotifyLink');
+    const refreshButtonElement = document.getElementById('refreshButton');
+    const historyListElement = document.getElementById('historyList');
+    const databaseListElement = document.getElementById('databaseList');
+    const stationSelectorElement = document.getElementById('stationSelector');
+    const tabs = document.querySelectorAll('.tab');
+    const tabContents = document.querySelectorAll('.tab-content');
     
-    let equalizerInterval;
-    let playHistory = [];
+    // Socket.io verbinding
+    const socket = io();
     
-    // Configuratie voor de player
-    const streamUrl = 'https://playerservices.streamtheworld.com/api/livestream-redirect/KINK.mp3';
-    
-    // Functie om album art op te halen
-    async function getAlbumArt(artist, title) {
-        // Hier zou je de Last.fm API aanroepen
-        // Voor nu gebruiken we een placeholder functie die een standaard afbeelding teruggeeft
-        return 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iIzU1NSI+PHBhdGggZD0iTTEyIDJDNi40OCAyIDIgNi40OCAyIDEyczQuNDggMTAgMTAgMTAgMTAtNC40OCAxMC0xMFMxNy41MiAyIDEyIDJ6bTAgMTQuNWMtMi40OSAwLTQuNS0yLjAxLTQuNS00LjVTOS41MSA3LjUgMTIgNy41czQuNSAyLjAxIDQuNSA0LjUtMi4wMSA0LjUtNC41IDQuNXptMC01LjVjLS41NSAwLTEgLjQ1LTEgMXMuNDUgMSAxIDEgMS0uNDUgMS0xLS40NS0xLTEtMXoiLz48L3N2Zz4=';
-        
-        // In een volledige implementatie zou je iets als dit gebruiken:
-        // return await searchAlbumArt(artist, title);
-    }
-    
-    // Functie om metadata te verwerken
-    const onMetadata = async (metadata) => {
-        console.log('Nieuwe metadata ontvangen:', metadata);
-        
-        if (metadata.StreamTitle) {
-            // Vaak is het formaat "Artiest - Titel"
-            const parts = metadata.StreamTitle.split(' - ');
-            if (parts.length >= 2) {
-                const artist = parts[0].trim();
-                const title = parts.slice(1).join(' - ').trim();
-                
-                currentTitle.textContent = title;
-                currentArtist.textContent = artist;
-                
-                // Haal album art op
-                const albumArtUrl = await getAlbumArt(artist, title);
-                currentAlbumArt.src = albumArtUrl;
-                
-                // Voeg toe aan afspeelgeschiedenis als het een nieuw nummer is
-                const lastTrack = playHistory.length > 0 ? playHistory[0] : null;
-                if (!lastTrack || lastTrack.title !== title || lastTrack.artist !== artist) {
-                    const timestamp = new Date();
-                    const trackInfo = {
-                        title: title,
-                        artist: artist,
-                        timestamp: timestamp,
-                        albumArt: albumArtUrl
-                    };
-                    
-                    // Voeg toe aan het begin van de geschiedenis
-                    playHistory.unshift(trackInfo);
-                    
-                    // Update de weergave
-                    updatePlaylistDisplay();
-                    
-                    // Voeg Spotify link toe indien gewenst
-                    // Dit zou een link kunnen zijn die de Spotify app opent
-                    // const spotifyUrl = `spotify:search:${encodeURIComponent(artist + ' ' + title)}`;
-                }
-            } else {
-                // Als we de titel niet kunnen splitsen, toon dan de hele string
-                currentTitle.textContent = metadata.StreamTitle;
-                currentArtist.textContent = '';
-            }
-        }
-    };
-    
-    // Maak een nieuwe player instantie
-    const player = new IcecastMetadataPlayer(
-        streamUrl,
-        {
-            onMetadata,
-            metadataTypes: ["icy"],
-            audioElement: audioElement,
-            onError: (error) => {
-                console.error('Er is een fout opgetreden:', error);
-            }
-        }
-    );
-    
-    // Event listeners voor de knoppen
-    playButton.addEventListener('click', function() {
-        player.play();
-        equalizerInterval = setInterval(animateEqualizer, 300);
+    // Debug logging
+    socket.on('connect', () => {
+        console.log('Verbonden met server via WebSocket');
     });
     
-    stopButton.addEventListener('click', function() {
-        player.stop();
-        clearInterval(equalizerInterval);
-        // Reset equalizer bars
-        equalizerBars.forEach(bar => {
-            bar.style.height = '0%';
+    socket.on('connect_error', (error) => {
+        console.error('WebSocket verbindingsfout:', error);
+    });
+    
+    // Laad beschikbare stations
+    async function loadStations() {
+        try {
+            console.log('Stations laden...');
+            const response = await fetch(`${API_BASE_URL}/api/stations`);
+            stations = await response.json();
+            console.log('Stations geladen:', stations);
+            
+            // Maak station knoppen
+            stationSelectorElement.innerHTML = '';
+            stations.forEach(station => {
+                const button = document.createElement('button');
+                button.className = 'station-button';
+                button.textContent = station.name;
+                button.dataset.station = station.name;
+                button.title = station.description;
+                button.addEventListener('click', () => selectStation(station.name));
+                stationSelectorElement.appendChild(button);
+            });
+            
+            // Selecteer het eerste station als er nog geen geselecteerd is
+            if (stations.length > 0 && !currentStation) {
+                selectStation(stations[0].name);
+            }
+        } catch (error) {
+            console.error('Fout bij laden stations:', error);
+        }
+    }
+    
+    // Selecteer een station
+    function selectStation(stationName) {
+        console.log(`Station selecteren: ${stationName}`);
+        currentStation = stationName;
+        
+        // Update UI
+        document.querySelectorAll('.station-button').forEach(button => {
+            button.classList.toggle('active', button.dataset.station === stationName);
+        });
+        
+        // Update audio source met proxy URL
+        audioSourceElement.src = `/proxy-stream/${stationName}`;
+        audioPlayerElement.load();
+        
+        // Laad huidige metadata
+        loadCurrentMetadata(stationName);
+        
+        // Laad geschiedenis
+        loadHistory(stationName);
+        
+        // Laad database geschiedenis
+        loadDatabaseHistory(stationName);
+    }
+    
+    // Laad huidige metadata
+    async function loadCurrentMetadata(stationName) {
+        try {
+            console.log(`Huidige metadata laden voor ${stationName}...`);
+            const response = await fetch(`${API_BASE_URL}/api/metadata/current/${stationName}`);
+            const metadata = await response.json();
+            console.log(`Metadata geladen voor ${stationName}:`, metadata);
+            updateMetadataDisplay(metadata);
+        } catch (error) {
+            console.error('Fout bij laden metadata:', error);
+        }
+    }
+    
+    // Laad geschiedenis
+    async function loadHistory(stationName) {
+        try {
+            console.log(`Geschiedenis laden voor ${stationName}...`);
+            const response = await fetch(`${API_BASE_URL}/api/metadata/history/${stationName}`);
+            const history = await response.json();
+            console.log(`Geschiedenis geladen voor ${stationName}:`, history);
+            updateHistoryDisplay(history);
+        } catch (error) {
+            console.error('Fout bij laden geschiedenis:', error);
+        }
+    }
+    
+    // Laad database geschiedenis
+    async function loadDatabaseHistory(stationName) {
+        try {
+            console.log(`Database geschiedenis laden voor ${stationName}...`);
+            const response = await fetch(`${API_BASE_URL}/api/metadata/database/${stationName}`);
+            const history = await response.json();
+            console.log(`Database geschiedenis geladen voor ${stationName}:`, history);
+            updateDatabaseHistoryDisplay(history);
+        } catch (error) {
+            console.error('Fout bij laden database geschiedenis:', error);
+        }
+    }
+    
+    // Update metadata weergave
+    function updateMetadataDisplay(metadata) {
+        if (!metadata) return;
+        
+        trackTitleElement.textContent = metadata.title || 'Onbekend';
+        trackArtistElement.textContent = metadata.artist || 'Onbekend';
+        
+        if (metadata.albumArt) {
+            albumArtElement.src = metadata.albumArt;
+        } else {
+            albumArtElement.src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iIzU1NSI+PHBhdGggZD0iTTEyIDJDNi40OCAyIDIgNi40OCAyIDEyczQuNDggMTAgMTAgMTAgMTAtNC40OCAxMC0xMFMxNy41MiAyIDEyIDJ6bTAgMTQuNWMtMi40OSAwLTQuNS0yLjAxLTQuNS00LjVTOS41MSA3LjUgMTIgNy41czQuNSAyLjAxIDQuNSA0LjUtMi4wMSA0LjUtNC41IDQuNXptMC01LjVjLS41NSAwLTEgLjQ1LTEgMXMuNDUgMSAxIDEgMS0uNDUgMS0xLS40NS0xLTEtMXoiLz48L3N2Zz4=';
+        }
+        
+        if (metadata.timestamp) {
+            const date = new Date(metadata.timestamp);
+            timestampElement.textContent = `Bijgewerkt: ${date.toLocaleTimeString()}`;
+        } else {
+            timestampElement.textContent = '';
+        }
+        
+        // Update Spotify link
+        updateSpotifyLink(metadata.artist, metadata.title);
+    }
+    
+    // Update Spotify link
+    function updateSpotifyLink(artist, title) {
+        if (artist && title) {
+            const query = encodeURIComponent(`${artist} ${title}`);
+            spotifyLinkElement.href = `spotify:search:${query}`;
+            spotifyLinkElement.onclick = function(e) {
+                // Probeer eerst de Spotify app te openen
+                setTimeout(function() {
+                    // Als de app niet opent, open dan de web versie
+                    window.open(`https://open.spotify.com/search/${query}`, '_blank');
+                }, 1000);
+            };
+        } else {
+            spotifyLinkElement.href = '#';
+        }
+    }
+    
+    // Update geschiedenis weergave
+    function updateHistoryDisplay(history) {
+        historyListElement.innerHTML = '';
+        
+        if (!history || history.length === 0) {
+            const emptyItem = document.createElement('li');
+            emptyItem.className = 'history-item';
+            emptyItem.textContent = 'Geen recente nummers gevonden';
+            historyListElement.appendChild(emptyItem);
+            return;
+        }
+        
+        history.forEach(item => {
+            const listItem = createHistoryListItem(item);
+            historyListElement.appendChild(listItem);
+        });
+    }
+    
+    // Update database geschiedenis weergave
+    function updateDatabaseHistoryDisplay(history) {
+        databaseListElement.innerHTML = '';
+        
+        if (!history || history.length === 0) {
+            const emptyItem = document.createElement('li');
+            emptyItem.className = 'history-item';
+            emptyItem.textContent = 'Geen geschiedenis gevonden in de database';
+            databaseListElement.appendChild(emptyItem);
+            return;
+        }
+        
+        history.forEach(item => {
+            const listItem = createHistoryListItem(item);
+            databaseListElement.appendChild(listItem);
+        });
+    }
+    
+    // Maak een geschiedenis lijst item
+    function createHistoryListItem(item) {
+        const listItem = document.createElement('li');
+        listItem.className = 'history-item';
+        
+        const albumArt = document.createElement('img');
+        albumArt.className = 'history-album-art';
+        albumArt.src = item.albumArt || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iIzU1NSI+PHBhdGggZD0iTTEyIDJDNi40OCAyIDIgNi40OCAyIDEyczQuNDggMTAgMTAgMTAgMTAtNC40OCAxMC0xMFMxNy41MiAyIDEyIDJ6bTAgMTQuNWMtMi40OSAwLTQuNS0yLjAxLTQuNS00LjVTOS41MSA3LjUgMTIgNy41czQuNSAyLjAxIDQuNSA0LjUtMi4wMSA0LjUtNC41IDQuNXptMC01LjVjLS41NSAwLTEgLjQ1LTEgMXMuNDUgMSAxIDEgMS0uNDUgMS0xLS40NS0xLTEtMXoiLz48L3N2Zz4=';
+        albumArt.alt = 'Album Art';
+        
+        const trackInfo = document.createElement('div');
+        trackInfo.className = 'history-track-info';
+        
+        const trackTitle = document.createElement('div');
+        trackTitle.className = 'history-track-title';
+        trackTitle.textContent = item.title || 'Onbekend';
+        
+        const trackArtist = document.createElement('div');
+        trackArtist.className = 'history-track-artist';
+        trackArtist.textContent = item.artist || 'Onbekend';
+        
+        const timestamp = document.createElement('div');
+        timestamp.className = 'history-timestamp';
+        if (item.timestamp) {
+            const date = new Date(item.timestamp);
+            timestamp.textContent = date.toLocaleString();
+        }
+        
+        trackInfo.appendChild(trackTitle);
+        trackInfo.appendChild(trackArtist);
+        trackInfo.appendChild(timestamp);
+        
+        const spotifyLink = document.createElement('a');
+        spotifyLink.className = 'history-spotify-link';
+        spotifyLink.href = `spotify:search:${encodeURIComponent(`${item.artist} ${item.title}`)}`;
+        spotifyLink.textContent = 'Spotify';
+        spotifyLink.target = '_blank';
+        spotifyLink.onclick = function(e) {
+            setTimeout(function() {
+                window.open(`https://open.spotify.com/search/${encodeURIComponent(`${item.artist} ${item.title}`)}`, '_blank');
+            }, 1000);
+        };
+        
+        listItem.appendChild(albumArt);
+        listItem.appendChild(trackInfo);
+        listItem.appendChild(spotifyLink);
+        
+        return listItem;
+    }
+    
+    // Socket.io event handlers
+    socket.on('metadata_update', (data) => {
+        console.log('Nieuwe metadata ontvangen:', data);
+        if (data.station === currentStation) {
+            updateMetadataDisplay(data.metadata);
+            loadHistory(currentStation);
+        }
+    });
+    
+    // Event listeners
+    refreshButtonElement.addEventListener('click', () => {
+        if (currentStation) {
+            console.log(`Metadata update aanvragen voor ${currentStation}`);
+            socket.emit('request_update', currentStation);
+            loadCurrentMetadata(currentStation);
+            loadHistory(currentStation);
+            loadDatabaseHistory(currentStation);
+        }
+    });
+    
+    // Tab switching
+    tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            const tabName = tab.dataset.tab;
+            
+            // Update active tab
+            tabs.forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            
+            // Update active content
+            tabContents.forEach(content => {
+                content.classList.remove('active');
+            });
+            document.getElementById(`${tabName}Tab`).classList.add('active');
+            
+            // Refresh content if needed
+            if (tabName === 'database' && currentStation) {
+                loadDatabaseHistory(currentStation);
+            }
         });
     });
     
-    // Functie om de afspeelgeschiedenis weer te geven
-    function updatePlaylistDisplay() {
-        playlistContainer.innerHTML = '';
-        
-        playHistory.forEach((track, index) => {
-            const playlistItem = document.createElement('div');
-            playlistItem.className = 'playlist-item' + (index === 0 ? ' current' : '');
-            
-            // Equalizer icon voor het huidige nummer
-            if (index === 0) {
-                const equalizerIcon = document.createElement('div');
-                equalizerIcon.className = 'equalizer-icon';
-                for (let i = 0; i < 4; i++) {
-                    const bar = document.createElement('div');
-                    bar.className = 'bar';
-                    equalizerIcon.appendChild(bar);
-                }
-                playlistItem.appendChild(equalizerIcon);
-            }
-            
-            // Album art
-            const albumArtDiv = document.createElement('div');
-            albumArtDiv.className = 'playlist-album-art';
-            const albumImg = document.createElement('img');
-            albumImg.src = track.albumArt || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iIzU1NSI+PHBhdGggZD0iTTEyIDJDNi40OCAyIDIgNi40OCAyIDEyczQuNDggMTAgMTAgMTAgMTAtNC40OCAxMC0xMFMxNy41MiAyIDEyIDJ6bTAgMTQuNWMtMi40OSAwLTQuNS0yLjAxLTQuNS00LjVTOS41MSA3LjUgMTIgNy41czQuNSAyLjAxIDQuNSA0LjUtMi4wMSA0LjUtNC41IDQuNXptMC01LjVjLS41NSAwLTEgLjQ1LTEgMXMuNDUgMSAxIDEgMS0uNDUgMS0xLS40NS0xLTEtMXoiLz48L3N2Zz4=';
-            albumImg.alt = 'Album Art';
-            albumArtDiv.appendChild(albumImg);
-            playlistItem.appendChild(albumArtDiv);
-            
-            // Track info
-            const trackInfoDiv = document.createElement('div');
-            trackInfoDiv.className = 'playlist-track-info';
-            
-            const titleDiv = document.createElement('div');
-            titleDiv.className = 'playlist-track-title';
-            titleDiv.textContent = track.title;
-            trackInfoDiv.appendChild(titleDiv);
-            
-            const artistDiv = document.createElement('div');
-            artistDiv.className = 'playlist-track-artist';
-            artistDiv.textContent = track.artist;
-            trackInfoDiv.appendChild(artistDiv);
-            
-            playlistItem.appendChild(trackInfoDiv);
-            
-            // Timestamp
-            const timeDiv = document.createElement('div');
-            timeDiv.className = 'playlist-track-time';
-            timeDiv.textContent = formatTime(track.timestamp);
-            playlistItem.appendChild(timeDiv);
-            
-            // Spotify link indien gewenst
-            // const spotifyLink = document.createElement('a');
-            // spotifyLink.href = `spotify:search:${encodeURIComponent(track.artist + ' ' + track.title)}`;
-            // spotifyLink.className = 'spotify-link';
-            // spotifyLink.textContent = 'Open in Spotify';
-            // spotifyLink.target = '_blank';
-            // playlistItem.appendChild(spotifyLink);
-            
-            playlistContainer.appendChild(playlistItem);
-        });
-    }
+    // Initialisatie
+    loadStations();
     
-    // Helper functie om tijd te formatteren
-    function formatTime(date) {
-        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    }
-    
-    // Start met animeren van de equalizer
-    animateEqualizer();
+    // Periodiek metadata verversen
+    setInterval(() => {
+        if (currentStation) {
+            loadCurrentMetadata(currentStation);
+        }
+    }, 30000); // Elke 30 seconden
 });

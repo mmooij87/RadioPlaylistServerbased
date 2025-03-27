@@ -7,6 +7,7 @@ const SpotifyWebApi = require('spotify-web-api-node');
 const sqlite3 = require('sqlite3').verbose();
 const fs = require('fs');
 const path = require('path');
+const axios = require('axios');
 
 // Configuratie
 const PORT = process.env.PORT || 3000;
@@ -90,7 +91,31 @@ function loadStreams() {
     return streams;
   } catch (error) {
     console.error('Fout bij het laden van streams:', error);
-    return {};
+    // Fallback naar hardcoded streams als het bestand niet kan worden geladen
+    return {
+      'KINK': {
+        url: 'https://22343.live.streamtheworld.com:443/KINK.mp3',
+        description: 'KINK Radio - Modern Rock',
+        currentMetadata: {
+          artist: 'Laden...',
+          title: 'Laden...',
+          timestamp: new Date().toISOString(),
+          albumArt: null
+        },
+        history: []
+      },
+      'NPO Radio 2': {
+        url: 'https://icecast.omroep.nl/radio2-bb-mp3',
+        description: 'NPO Radio 2 - De Grootste Hits en Het Beste van Nu',
+        currentMetadata: {
+          artist: 'Laden...',
+          title: 'Laden...',
+          timestamp: new Date().toISOString(),
+          albumArt: null
+        },
+        history: []
+      }
+    };
   }
 }
 
@@ -100,31 +125,44 @@ async function getAlbumArt(artist, title) {
     console.log(`Zoeken naar album art voor: ${artist} - ${title}`);
     
     // Vernieuw token indien nodig
-    const data = await spotifyApi.clientCredentialsGrant();
-    spotifyApi.setAccessToken(data.body['access_token']);
+    try {
+      const data = await spotifyApi.clientCredentialsGrant();
+      spotifyApi.setAccessToken(data.body['access_token']);
+    } catch (tokenError) {
+      console.error('Fout bij vernieuwen Spotify token:', tokenError);
+      // Ga door met zoeken, mogelijk werkt het met een bestaande token
+    }
     
     // Zoek naar track
-    const searchResult = await spotifyApi.searchTracks(`track:${title} artist:${artist}`);
-    
-    if (searchResult.body.tracks.items.length > 0) {
-      const track = searchResult.body.tracks.items[0];
-      if (track.album.images.length > 0) {
-        const albumImage = track.album.images[0].url;
-        console.log(`Album art gevonden via Spotify: ${albumImage}`);
-        return albumImage;
+    try {
+      const searchResult = await spotifyApi.searchTracks(`track:${title} artist:${artist}`);
+      
+      if (searchResult.body.tracks && searchResult.body.tracks.items.length > 0) {
+        const track = searchResult.body.tracks.items[0];
+        if (track.album && track.album.images && track.album.images.length > 0) {
+          const albumImage = track.album.images[0].url;
+          console.log(`Album art gevonden via Spotify: ${albumImage}`);
+          return albumImage;
+        }
       }
+    } catch (searchError) {
+      console.error('Fout bij zoeken naar track:', searchError);
     }
     
     // Als geen resultaat, probeer zonder 'track:' prefix
-    const altSearchResult = await spotifyApi.searchTracks(`${title} ${artist}`);
-    
-    if (altSearchResult.body.tracks.items.length > 0) {
-      const track = altSearchResult.body.tracks.items[0];
-      if (track.album.images.length > 0) {
-        const albumImage = track.album.images[0].url;
-        console.log(`Album art gevonden via alternatieve Spotify zoekopdracht: ${albumImage}`);
-        return albumImage;
+    try {
+      const altSearchResult = await spotifyApi.searchTracks(`${title} ${artist}`);
+      
+      if (altSearchResult.body.tracks && altSearchResult.body.tracks.items.length > 0) {
+        const track = altSearchResult.body.tracks.items[0];
+        if (track.album && track.album.images && track.album.images.length > 0) {
+          const albumImage = track.album.images[0].url;
+          console.log(`Album art gevonden via alternatieve Spotify zoekopdracht: ${albumImage}`);
+          return albumImage;
+        }
       }
+    } catch (altSearchError) {
+      console.error('Fout bij alternatieve zoekopdracht:', altSearchError);
     }
     
     // Als alles faalt, gebruik een standaard afbeelding
@@ -157,73 +195,97 @@ function saveMetadataToDatabase(station, metadata) {
 function initRadioStation(name, url) {
   console.log(`Initialiseren van radiostation: ${name} - ${url}`);
   
-  const radioStation = new Parser({
-    url: url,
-    userAgent: 'RadioPlaylistTracker/1.0.0',
-    keepListen: true,
-    autoUpdate: true,
-    metadataInterval: UPDATE_INTERVAL
-  });
-  
-  // Luister naar metadata updates
-  radioStation.on('metadata', async metadata => {
-    console.log(`Nieuwe metadata ontvangen voor ${name}:`, metadata);
+  try {
+    const radioStation = new Parser({
+      url: url,
+      userAgent: 'RadioPlaylistTracker/1.0.0',
+      keepListen: true,
+      autoUpdate: true,
+      metadataInterval: UPDATE_INTERVAL
+    });
     
-    if (metadata && metadata.get('StreamTitle')) {
-      // Vaak is het formaat "Artiest - Titel"
-      const streamTitle = metadata.get('StreamTitle');
-      const parts = streamTitle.split(' - ');
-      if (parts.length >= 2) {
-        const artist = parts[0].trim();
-        const title = parts.slice(1).join(' - ').trim();
-        
-        // Haal album art op
-        const albumArt = await getAlbumArt(artist, title);
-        
-        // Update huidige metadata
-        const newMetadata = {
-          artist,
-          title,
-          timestamp: new Date().toISOString(),
-          albumArt
-        };
-        
-        // Controleer of dit een nieuw nummer is
-        if (!radioStations[name].currentMetadata || 
-            radioStations[name].currentMetadata.artist !== artist || 
-            radioStations[name].currentMetadata.title !== title) {
+    // Luister naar metadata updates
+    radioStation.on('metadata', async metadata => {
+      console.log(`Nieuwe metadata ontvangen voor ${name}:`, metadata);
+      
+      if (metadata && metadata.get('StreamTitle')) {
+        // Vaak is het formaat "Artiest - Titel"
+        const streamTitle = metadata.get('StreamTitle');
+        const parts = streamTitle.split(' - ');
+        if (parts.length >= 2) {
+          const artist = parts[0].trim();
+          const title = parts.slice(1).join(' - ').trim();
+          
+          // Haal album art op
+          const albumArt = await getAlbumArt(artist, title);
           
           // Update huidige metadata
-          radioStations[name].currentMetadata = newMetadata;
+          const newMetadata = {
+            artist,
+            title,
+            timestamp: new Date().toISOString(),
+            albumArt
+          };
           
-          // Voeg toe aan geschiedenis
-          radioStations[name].history.unshift(newMetadata);
-          
-          // Beperk geschiedenis tot 50 items
-          if (radioStations[name].history.length > 50) {
-            radioStations[name].history = radioStations[name].history.slice(0, 50);
+          // Controleer of dit een nieuw nummer is
+          if (!radioStations[name].currentMetadata || 
+              radioStations[name].currentMetadata.artist !== artist || 
+              radioStations[name].currentMetadata.title !== title) {
+            
+            // Update huidige metadata
+            radioStations[name].currentMetadata = newMetadata;
+            
+            // Voeg toe aan geschiedenis
+            radioStations[name].history.unshift(newMetadata);
+            
+            // Beperk geschiedenis tot 50 items
+            if (radioStations[name].history.length > 50) {
+              radioStations[name].history = radioStations[name].history.slice(0, 50);
+            }
+            
+            // Sla op in database
+            saveMetadataToDatabase(name, newMetadata);
+            
+            // Stuur update naar clients
+            io.emit('metadata_update', { 
+              station: name, 
+              metadata: newMetadata 
+            });
+            
+            console.log(`Metadata bijgewerkt voor ${name}: ${artist} - ${title}`);
           }
-          
-          // Sla op in database
-          saveMetadataToDatabase(name, newMetadata);
-          
-          // Stuur update naar clients
-          io.emit('metadata_update', { 
-            station: name, 
-            metadata: newMetadata 
-          });
-          
-          console.log(`Metadata bijgewerkt voor ${name}: ${artist} - ${title}`);
         }
       }
-    }
-  });
-  
-  radioStation.on('error', error => {
-    console.error(`Fout bij het parsen van de stream voor ${name}:`, error);
-  });
-  
-  return radioStation;
+    });
+    
+    radioStation.on('error', error => {
+      console.error(`Fout bij het parsen van de stream voor ${name}:`, error);
+      
+      // Voeg dummy metadata toe als er een fout optreedt
+      if (!radioStations[name].currentMetadata || 
+          radioStations[name].currentMetadata.artist === 'Laden...') {
+        const dummyMetadata = {
+          artist: 'Radio DJ',
+          title: `${name} Live Stream`,
+          timestamp: new Date().toISOString(),
+          albumArt: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iIzU1NSI+PHBhdGggZD0iTTEyIDJDNi40OCAyIDIgNi40OCAyIDEyczQuNDggMTAgMTAgMTAgMTAtNC40OCAxMC0xMFMxNy41MiAyIDEyIDJ6bTAgMTQuNWMtMi40OSAwLTQuNS0yLjAxLTQuNS00LjVTOS41MSA3LjUgMTIgNy41czQuNSAyLjAxIDQuNSA0LjUtMi4wMSA0LjUtNC41IDQuNXptMC01LjVjLS41NSAwLTEgLjQ1LTEgMXMuNDUgMSAxIDEgMS0uNDUgMS0xLS40NS0xLTEtMXoiLz48L3N2Zz4='
+        };
+        
+        radioStations[name].currentMetadata = dummyMetadata;
+        radioStations[name].history.unshift(dummyMetadata);
+        
+        io.emit('metadata_update', { 
+          station: name, 
+          metadata: dummyMetadata 
+        });
+      }
+    });
+    
+    return radioStation;
+  } catch (error) {
+    console.error(`Fout bij initialiseren van radiostation ${name}:`, error);
+    return null;
+  }
 }
 
 // Initialisatie
@@ -241,16 +303,88 @@ async function initialize() {
     console.log('Spotify API geïnitialiseerd');
   } catch (error) {
     console.error('Fout bij initialiseren Spotify API:', error);
+    console.log('Doorgaan zonder Spotify API, zal standaard album art gebruiken');
   }
   
   // Start alle radiostations
   Object.entries(radioStations).forEach(([name, station]) => {
-    activeStations.push({
-      name,
-      parser: initRadioStation(name, station.url)
-    });
+    try {
+      const parser = initRadioStation(name, station.url);
+      if (parser) {
+        activeStations.push({
+          name,
+          parser
+        });
+      }
+    } catch (error) {
+      console.error(`Fout bij starten van radiostation ${name}:`, error);
+    }
   });
+  
+  // Voeg dummy metadata toe als er geen stations actief zijn
+  if (activeStations.length === 0) {
+    console.log('Geen actieve stations, voeg dummy metadata toe');
+    Object.keys(radioStations).forEach(name => {
+      const dummyMetadata = {
+        artist: 'Radio DJ',
+        title: `${name} Live Stream`,
+        timestamp: new Date().toISOString(),
+        albumArt: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iIzU1NSI+PHBhdGggZD0iTTEyIDJDNi40OCAyIDIgNi40OCAyIDEyczQuNDggMTAgMTAgMTAgMTAtNC40OCAxMC0xMFMxNy41MiAyIDEyIDJ6bTAgMTQuNWMtMi40OSAwLTQuNS0yLjAxLTQuNS00LjVTOS41MSA3LjUgMTIgNy41czQuNSAyLjAxIDQuNSA0LjUtMi4wMSA0LjUtNC41IDQuNXptMC01LjVjLS41NSAwLTEgLjQ1LTEgMXMuNDUgMSAxIDEgMS0uNDUgMS0xLS40NS0xLTEtMXoiLz48L3N2Zz4='
+      };
+      
+      radioStations[name].currentMetadata = dummyMetadata;
+      radioStations[name].history.unshift(dummyMetadata);
+    });
+  }
 }
+
+// Proxy voor audiostreams
+app.get('/proxy-stream/:station', async (req, res) => {
+  const station = req.params.station;
+  console.log(`Proxy request voor station: ${station}`);
+  
+  if (radioStations[station]) {
+    try {
+      const streamUrl = radioStations[station].url;
+      console.log(`Proxying stream: ${streamUrl}`);
+      
+      // Stel de juiste headers in
+      res.setHeader('Content-Type', 'audio/mpeg');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      
+      // Proxy de stream
+      try {
+        const response = await axios({
+          method: 'get',
+          url: streamUrl,
+          responseType: 'stream',
+          timeout: 10000,
+          headers: {
+            'User-Agent': 'RadioPlaylistTracker/1.0.0'
+          }
+        });
+        
+        response.data.pipe(res);
+        
+        // Afhandelen van fouten in de stream
+        response.data.on('error', (error) => {
+          console.error(`Stream error voor ${station}:`, error);
+          res.status(500).end();
+        });
+      } catch (axiosError) {
+        console.error(`Axios error voor ${station}:`, axiosError);
+        res.status(500).send('Fout bij het streamen');
+      }
+    } catch (error) {
+      console.error(`Fout bij proxy stream voor ${station}:`, error);
+      res.status(500).send('Fout bij het streamen');
+    }
+  } else {
+    console.error(`Station niet gevonden: ${station}`);
+    res.status(404).send('Station niet gevonden');
+  }
+});
 
 // API routes
 app.get('/', (req, res) => {
@@ -262,74 +396,94 @@ app.get('/handleiding', (req, res) => {
 });
 
 app.get('/api/stations', (req, res) => {
-  const stationList = Object.entries(radioStations).map(([name, station]) => ({
-    name,
-    description: station.description,
-    streamUrl: station.url,
-    currentMetadata: station.currentMetadata
-  }));
-  
-  res.json(stationList);
+  try {
+    const stationList = Object.entries(radioStations).map(([name, station]) => ({
+      name,
+      description: station.description,
+      streamUrl: station.url,
+      currentMetadata: station.currentMetadata
+    }));
+    
+    res.json(stationList);
+  } catch (error) {
+    console.error('Fout bij ophalen stations:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
 app.get('/api/metadata/current/:station?', (req, res) => {
-  const station = req.params.station;
-  
-  if (station) {
-    if (radioStations[station]) {
-      res.json(radioStations[station].currentMetadata);
+  try {
+    const station = req.params.station;
+    
+    if (station) {
+      if (radioStations[station]) {
+        res.json(radioStations[station].currentMetadata);
+      } else {
+        res.status(404).json({ error: 'Station niet gevonden' });
+      }
     } else {
-      res.status(404).json({ error: 'Station niet gevonden' });
+      // Als geen station is opgegeven, stuur alle huidige metadata
+      const allMetadata = {};
+      Object.entries(radioStations).forEach(([name, station]) => {
+        allMetadata[name] = station.currentMetadata;
+      });
+      res.json(allMetadata);
     }
-  } else {
-    // Als geen station is opgegeven, stuur alle huidige metadata
-    const allMetadata = {};
-    Object.entries(radioStations).forEach(([name, station]) => {
-      allMetadata[name] = station.currentMetadata;
-    });
-    res.json(allMetadata);
+  } catch (error) {
+    console.error('Fout bij ophalen huidige metadata:', error);
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
 app.get('/api/metadata/history/:station?', (req, res) => {
-  const station = req.params.station;
-  
-  if (station) {
-    if (radioStations[station]) {
-      res.json(radioStations[station].history);
+  try {
+    const station = req.params.station;
+    
+    if (station) {
+      if (radioStations[station]) {
+        res.json(radioStations[station].history);
+      } else {
+        res.status(404).json({ error: 'Station niet gevonden' });
+      }
     } else {
-      res.status(404).json({ error: 'Station niet gevonden' });
+      // Als geen station is opgegeven, stuur alle geschiedenis
+      const allHistory = {};
+      Object.entries(radioStations).forEach(([name, station]) => {
+        allHistory[name] = station.history;
+      });
+      res.json(allHistory);
     }
-  } else {
-    // Als geen station is opgegeven, stuur alle geschiedenis
-    const allHistory = {};
-    Object.entries(radioStations).forEach(([name, station]) => {
-      allHistory[name] = station.history;
-    });
-    res.json(allHistory);
+  } catch (error) {
+    console.error('Fout bij ophalen geschiedenis:', error);
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
 app.get('/api/metadata/database/:station?', (req, res) => {
-  const station = req.params.station;
-  let query = 'SELECT * FROM history';
-  let params = [];
-  
-  if (station) {
-    query += ' WHERE station = ?';
-    params.push(station);
-  }
-  
-  query += ' ORDER BY timestamp DESC LIMIT 100';
-  
-  db.all(query, params, (err, rows) => {
-    if (err) {
-      console.error('Database query error:', err);
-      res.status(500).json({ error: 'Database error' });
-    } else {
-      res.json(rows);
+  try {
+    const station = req.params.station;
+    let query = 'SELECT * FROM history';
+    let params = [];
+    
+    if (station) {
+      query += ' WHERE station = ?';
+      params.push(station);
     }
-  });
+    
+    query += ' ORDER BY timestamp DESC LIMIT 100';
+    
+    db.all(query, params, (err, rows) => {
+      if (err) {
+        console.error('Database query error:', err);
+        res.status(500).json({ error: 'Database error' });
+      } else {
+        res.json(rows);
+      }
+    });
+  } catch (error) {
+    console.error('Fout bij ophalen database geschiedenis:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
 // Socket.io verbindingen
@@ -353,6 +507,32 @@ io.on('connection', socket => {
     console.log(`Metadata update aangevraagd door client voor ${stationName}`);
     // In de huidige versie van de library is er geen directe methode om metadata te forceren
     // We kunnen een nieuwe instantie maken of wachten op de automatische update
+    
+    // Stuur de huidige metadata opnieuw
+    if (stationName && radioStations[stationName]) {
+      socket.emit('metadata_update', { 
+        station: stationName, 
+        metadata: radioStations[stationName].currentMetadata 
+      });
+    } else {
+      // Stuur alle metadata opnieuw
+      Object.entries(radioStations).forEach(([name, station]) => {
+        socket.emit('metadata_update', { 
+          station: name, 
+          metadata: station.currentMetadata 
+        });
+      });
+    }
+  });
+});
+
+// Voeg een route toe voor health check
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    activeStations: activeStations.length,
+    totalStations: Object.keys(radioStations).length
   });
 });
 
