@@ -3,4 +3,3 @@
 // Voeg nieuwe streams toe door een nieuwe regel toe te voegen in hetzelfde formaat
 
 KINK|https://playerservices.streamtheworld.com/api/livestream-redirect/KINK.mp3|KINK No Alternative
-Veronica|https://playerservices.streamtheworld.com/api/livestream-redirect/VERONICA.mp3|Veronica
