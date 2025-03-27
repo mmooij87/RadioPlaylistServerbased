@@ -11,7 +11,10 @@
     "axios": "^1.4.0",
     "cors": "^2.8.5",
     "express": "^4.18.2",
-    "socket.io": "^4.7.2"
+    "icecast-parser": "^4.0.2",
+    "socket.io": "^4.7.2",
+    "spotify-web-api-node": "^5.0.2",
+    "sqlite3": "^5.1.6"
   },
   "devDependencies": {
     "nodemon": "^2.0.22"

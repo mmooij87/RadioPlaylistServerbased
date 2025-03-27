@@ -18,7 +18,11 @@ const SPOTIFY_CLIENT_ID = process.env.SPOTIFY_CLIENT_ID || '0331e96218354e339995
 const SPOTIFY_CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET || '3c23312656b24537821f441212d1b74d';
 
 // Database setup
-const db = new sqlite3.Database('./radio_history.db');
+// Database setup
+const dbPath = process.env.NODE_ENV === 'production' 
+  ? '/tmp/radio_history.db'  // Use /tmp for Render's ephemeral storage
+  : './radio_history.db';    // Local development path
+const db = new sqlite3.Database(dbPath);
 
 // Spotify API setup
 const spotifyApi = new SpotifyWebApi({
