@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Radio Playlist Tracker</title>
+    <link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iIzU1NSI+PHBhdGggZD0iTTEyIDJDNi40OCAyIDIgNi40OCAyIDEyczQuNDggMTAgMTAgMTAgMTAtNC40OCAxMC0xMFMxNy41MiAyIDEyIDJ6bTAgMTQuNWMtMi40OSAwLTQuNS0yLjAxLTQuNS00LjVTOS41MSA3LjUgMTIgNy41czQuNSAyLjAxIDQuNSA0LjUtMi4wMSA0LjUtNC41IDQuNXptMC01LjVjLS41NSAwLTEgLjQ1LTEgMXMuNDUgMSAxIDEgMS0uNDUgMS0xLS40NS0xLTEtMXoiLz48L3N2Zz4=">
+    <style>
+        :root {
+            --bg-color: #121212;
+            --card-bg: #1e1e1e;
+            --text-color: #e0e0e0;
+            --accent-color: #1DB954;
+            --secondary-color: #535353;
+            --header-bg: #090909;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 0;
+            line-height: 1.6;
+        }
+        
+        header {
+            background-color: var(--header-bg);
+            padding: 1rem;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        h1 {
+            margin: 0;
+            font-size: 1.8rem;
+            text-align: center;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 1rem;
+        }
+        
+        .station-selector {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            justify-content: center;
+        }
+        
+        .station-button {
+            background-color: var(--secondary-color);
+            color: var(--text-color);
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .station-button.active {
+            background-color: var(--accent-color);
+            color: #000;
+            font-weight: bold;
+        }
+        
+        .station-button:hover {
+            background-color: var(--accent-color);
+            color: #000;
+        }
+        
+        .player-container {
+            background-color: var(--card-bg);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .now-playing {
+            display: flex;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        
+        .album-art {
+            width: 100px;
+            height: 100px;
+            border-radius: 4px;
+            margin-right: 1rem;
+            object-fit: cover;
+            background-color: var(--secondary-color);
+        }
+        
+        .track-info {
+            flex: 1;
+        }
+        
+        .track-title {
+            font-size: 1.4rem;
+            font-weight: bold;
+            margin: 0 0 0.5rem 0;
+        }
+        
+        .track-artist {
+            font-size: 1.1rem;
+            color: #b3b3b3;
+            margin: 0;
+        }
+        
+        .timestamp {
+            font-size: 0.8rem;
+            color: var(--secondary-color);
+            margin-top: 0.5rem;
+        }
+        
+        .controls {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 1rem;
+        }
+        
+        .audio-player {
+            width: 100%;
+            margin-top: 1rem;
+        }
+        
+        .audio-player audio {
+            width: 100%;
+            height: 40px;
+        }
+        
+        .spotify-link {
+            display: inline-flex;
+            align-items: center;
+            background-color: var(--accent-color);
+            color: #000;
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+        
+        .spotify-link:hover {
+            background-color: #1ed760;
+        }
+        
+        .spotify-icon {
+            width: 20px;
+            height: 20px;
+            margin-right: 0.5rem;
+        }
+        
+        .refresh-button {
+            background-color: var(--secondary-color);
+            color: var(--text-color);
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .refresh-button:hover {
+            background-color: #777;
+        }
+        
+        .history-container {
+            background-color: var(--card-bg);
+            border-radius: 8px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .history-title {
+            margin-top: 0;
+            margin-bottom: 1rem;
+            font-size: 1.3rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .history-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .history-item {
+            display: flex;
+            align-items: center;
+            padding: 0.8rem 0;
+            border-bottom: 1px solid #333;
+        }
+        
+        .history-item:last-child {
+            border-bottom: none;
+        }
+        
+        .history-album-art {
+            width: 50px;
+            height: 50px;
+            border-radius: 4px;
+            margin-right: 1rem;
+            object-fit: cover;
+            background-color: var(--secondary-color);
+        }
+        
+        .history-track-info {
+            flex: 1;
+        }
+        
+        .history-track-title {
+            font-size: 1rem;
+            font-weight: bold;
+            margin: 0 0 0.2rem 0;
+        }
+        
+        .history-track-artist {
+            font-size: 0.9rem;
+            color: #b3b3b3;
+            margin: 0;
+        }
+        
+        .history-timestamp {
+            font-size: 0.8rem;
+            color: var(--secondary-color);
+            margin-top: 0.2rem;
+        }
+        
+        .history-spotify-link {
+            display: inline-flex;
+            align-items: center;
+            background-color: var(--accent-color);
+            color: #000;
+            text-decoration: none;
+            padding: 0.3rem 0.7rem;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 0.8rem;
+            transition: all 0.2s;
+            margin-left: 0.5rem;
+        }
+        
+        .history-spotify-link:hover {
+            background-color: #1ed760;
+        }
+        
+        .equalizer {
+            display: flex;
+            align-items: flex-end;
+            height: 20px;
+            width: 30px;
+            margin-right: 10px;
+        }
+        
+        .equalizer-bar {
+            background-color: var(--accent-color);
+            width: 4px;
+            height: 5px;
+            margin: 0 1px;
+            border-radius: 1px;
+            animation: equalize 1s infinite;
+        }
+        
+        .equalizer-bar:nth-child(1) {
+            animation-delay: 0.1s;
+        }
+        
+        .equalizer-bar:nth-child(2) {
+            animation-delay: 0.3s;
+        }
+        
+        .equalizer-bar:nth-child(3) {
+            animation-delay: 0.5s;
+        }
+        
+        .equalizer-bar:nth-child(4) {
+            animation-delay: 0.7s;
+        }
+        
+        @keyframes equalize {
+            0% {
+                height: 5px;
+            }
+            50% {
+                height: 15px;
+            }
+            100% {
+                height: 5px;
+            }
+        }
+        
+        .playing-indicator {
+            display: flex;
+            align-items: center;
+            font-size: 0.8rem;
+            color: var(--accent-color);
+            margin-bottom: 0.5rem;
+        }
+        
+        .tabs {
+            display: flex;
+            margin-bottom: 1rem;
+        }
+        
+        .tab {
+            padding: 0.5rem 1rem;
+            background-color: var(--secondary-color);
+            color: var(--text-color);
+            border: none;
+            cursor: pointer;
+            flex: 1;
+            text-align: center;
+            transition: all 0.2s;
+        }
+        
+        .tab:first-child {
+            border-radius: 4px 0 0 4px;
+        }
+        
+        .tab:last-child {
+            border-radius: 0 4px 4px 0;
+        }
+        
+        .tab.active {
+            background-color: var(--accent-color);
+            color: #000;
+            font-weight: bold;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        @media (max-width: 600px) {
+            .now-playing {
+                flex-direction: column;
+                text-align: center;
+            }
+            
+            .album-art {
+                margin-right: 0;
+                margin-bottom: 1rem;
+            }
+            
+            .controls {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+            
+            .spotify-link, .refresh-button {
+                width: 100%;
+                text-align: center;
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Radio Playlist Tracker</h1>
+    </header>
+    
+    <div class="container">
+        <div class="station-selector" id="stationSelector">
+            <!-- Stations will be added here dynamically -->
+        </div>
+        
+        <div class="player-container">
+            <div class="now-playing">
+                <img id="albumArt" class="album-art" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iIzU1NSI+PHBhdGggZD0iTTEyIDJDNi40OCAyIDIgNi40OCAyIDEyczQuNDggMTAgMTAgMTAgMTAtNC40OCAxMC0xMFMxNy41MiAyIDEyIDJ6bTAgMTQuNWMtMi40OSAwLTQuNS0yLjAxLTQuNS00LjVTOS41MSA3LjUgMTIgNy41czQuNSAyLjAxIDQuNSA0LjUtMi4wMSA0LjUtNC41IDQuNXptMC01LjVjLS41NSAwLTEgLjQ1LTEgMXMuNDUgMSAxIDEgMS0uNDUgMS0xLS40NS0xLTEtMXoiLz48L3N2Zz4=" alt="Album Art">
+                <div class="track-info">
+                    <div class="playing-indicator">
+                        <div class="equalizer">
+                            <div class="equalizer-bar"></div>
+                            <div class="equalizer-bar"></div>
+                            <div class="equalizer-bar"></div>
+                            <div class="equalizer-bar"></div>
+                        </div>
+                        <span>NU LIVE</span>
+                    </div>
+                    <h2 id="trackTitle" class="track-title">Laden...</h2>
+                    <p id="trackArtist" class="track-artist">Laden...</p>
+                    <p id="timestamp" class="timestamp"></p>
+                </div>
+            </div>
+            
+            <div class="audio-player">
+                <audio id="audioPlayer" controls>
+                    <source id="audioSource" src="" type="audio/mpeg">
+                    Je browser ondersteunt geen audio element.
+                </audio>
+            </div>
+            
+            <div class="controls">
+                <a id="spotifyLink" class="spotify-link" href="#" target="_blank">
+                    <svg class="spotify-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+                    </svg>
+                    Open in Spotify
+                </a>
+                <button id="refreshButton" class="refresh-button">Ververs Metadata</button>
+            </div>
+        </div>
+        
+        <div class="tabs">
+            <button class="tab active" data-tab="recent">Recente Nummers</button>
+            <button class="tab" data-tab="database">Afspeelgeschiedenis</button>
+        </div>
+        
+        <div id="recentTab" class="tab-content active">
+            <div class="history-container">
+                <h3 class="history-title">Recente Nummers</h3>
+                <ul id="historyList" class="history-list">
+                    <!-- History items will be added here dynamically -->
+                </ul>
+            </div>
+        </div>
+        
+        <div id="databaseTab" class="tab-content">
+            <div class="history-container">
+                <h3 class="history-title">Afspeelgeschiedenis</h3>
+                <ul id="databaseList" class="history-list">
+                    <!-- Database history items will be added here dynamically -->
+                </ul>
+            </div>
+        </div>
+    </div>
+    
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        // Configuratie
+        const API_BASE_URL = window.location.origin;
+        let currentStation = null;
+        let stations = [];
+        
+        // DOM elementen
+        const albumArtElement = document.getElementById('albumArt');
+        const trackTitleElement = document.getElementById('trackTitle');
+        const trackArtistElement = document.getElementById('trackArtist');
+        const timestampElement = document.getElementById('timestamp');
+        const audioPlayerElement = document.getElementById('audioPlayer');
+        const audioSourceElement = document.getElementById('audioSource');
+        const spotifyLinkElement = document.getElementById('spotifyLink');
+        const refreshButtonElement = document.getElementById('refreshButton');
+        const historyListElement = document.getElementById('historyList');
+        const databaseListElement = document.getElementById('databaseList');
+        const stationSelectorElement = document.getElementById('stationSelector');
+        const tabs = document.querySelectorAll('.tab');
+        const tabContents = document.querySelectorAll('.tab-content');
+        
+        // Socket.io verbinding
+        const socket = io();
+        
+        // Laad beschikbare stations
+        async function loadStations() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/stations`);
+                stations = await response.json();
+                
+                // Maak station knoppen
+                stationSelectorElement.innerHTML = '';
+                stations.forEach(station => {
+                    const button = document.createElement('button');
+                    button.className = 'station-button';
+                    button.textContent = station.name;
+                    button.dataset.station = station.name;
+                    button.title = station.description;
+                    button.addEventListener('click', () => selectStation(station.name));
+                    stationSelectorElement.appendChild(button);
+                });
+                
+                // Selecteer het eerste station als er nog geen geselecteerd is
+                if (stations.length > 0 && !currentStation) {
+                    selectStation(stations[0].name);
+                }
+            } catch (error) {
+                console.error('Fout bij laden stations:', erro<response clipped><NOTE>To save on context only part of this file has been shown to you. You should retry this tool after you have searched inside the file with `grep -n` in order to find the line numbers of what you are looking for.</NOTE>

@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Radio Playlist Tracker - Handleiding</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1, h2, h3 {
+            color: #1DB954;
+        }
+        code {
+            background-color: #f4f4f4;
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-family: monospace;
+        }
+        pre {
+            background-color: #f4f4f4;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        .note {
+            background-color: #f8f9fa;
+            border-left: 4px solid #1DB954;
+            padding: 10px 15px;
+            margin: 15px 0;
+        }
+        img {
+            max-width: 100%;
+            height: auto;
+            display: block;
+            margin: 20px 0;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Radio Playlist Tracker - Handleiding</h1>
+    
+    <h2>Inleiding</h2>
+    <p>
+        De Radio Playlist Tracker is een webapplicatie waarmee je de metadata (artiest en titel) van verschillende radiostations kunt bijhouden. 
+        De applicatie haalt real-time metadata op uit de streams, toont album covers via Spotify, en slaat de afspeelgeschiedenis op in een database.
+    </p>
+
+    <h2>Functies</h2>
+    <ul>
+        <li>Real-time metadata extractie uit radio streams</li>
+        <li>Ondersteuning voor meerdere radiostations</li>
+        <li>Album covers via Spotify API</li>
+        <li>Opslag van afspeelgeschiedenis in een database</li>
+        <li>Eenvoudig configureerbaar via een tekstbestand</li>
+        <li>Directe links naar Spotify voor elk nummer</li>
+    </ul>
+
+    <h2>Gebruik van de applicatie</h2>
+    
+    <h3>Radiostations selecteren</h3>
+    <p>
+        Bovenaan de pagina vind je knoppen voor alle beschikbare radiostations. Klik op een station om het te selecteren.
+        De player, huidige metadata en geschiedenis worden automatisch bijgewerkt.
+    </p>
+
+    <h3>Afspelen van de stream</h3>
+    <p>
+        Gebruik de ingebouwde audiospeler om de geselecteerde radiostream af te spelen. Je kunt het volume aanpassen of de stream pauzeren.
+    </p>
+
+    <h3>Metadata bekijken</h3>
+    <p>
+        De huidige artiest en titel worden getoond in het bovenste gedeelte van de pagina, samen met de album cover.
+        De metadata wordt automatisch bijgewerkt wanneer een nieuw nummer begint.
+    </p>
+
+    <h3>Geschiedenis bekijken</h3>
+    <p>
+        Er zijn twee tabbladen voor de geschiedenis:
+    </p>
+    <ul>
+        <li><strong>Recente Nummers</strong>: Toont de meest recente nummers sinds de server is opgestart</li>
+        <li><strong>Afspeelgeschiedenis</strong>: Toont de volledige geschiedenis uit de database</li>
+    </ul>
+
+    <h3>Spotify integratie</h3>
+    <p>
+        Voor elk nummer is er een "Open in Spotify" knop. Wanneer je hierop klikt, wordt geprobeerd om de Spotify app te openen met een zoekopdracht voor het nummer.
+        Als de app niet beschikbaar is, wordt de Spotify website geopend in een nieuw tabblad.
+    </p>
+
+    <h2>Toevoegen van nieuwe radiostations</h2>
+    <p>
+        Je kunt eenvoudig nieuwe radiostations toevoegen door het bestand <code>streams.txt</code> te bewerken.
+    </p>
+
+    <h3>Formaat van streams.txt</h3>
+    <pre>
+// Format: name|url|description
+// Voeg nieuwe streams toe door een nieuwe regel toe te voegen in hetzelfde formaat
+
+KINK|https://22343.live.streamtheworld.com:443/KINK.mp3|KINK Radio - Modern Rock
+Radio 538|https://21253.live.streamtheworld.com/RADIO538.mp3|Radio 538 - Hits
+Sky Radio|https://19993.live.streamtheworld.com/SKYRADIO.mp3|Sky Radio - Feel Good Hits
+Radio 10|https://20873.live.streamtheworld.com/RADIO10.mp3|Radio 10 - De Grootste Hits Aller Tijden
+NPO Radio 2|https://icecast.omroep.nl/radio2-bb-mp3|NPO Radio 2 - De Grootste Hits en Het Beste van Nu</pre>
+
+    <h3>Een nieuw station toevoegen</h3>
+    <p>
+        Om een nieuw station toe te voegen:
+    </p>
+    <ol>
+        <li>Open het bestand <code>streams.txt</code></li>
+        <li>Voeg een nieuwe regel toe in het formaat: <code>Naam|URL|Beschrijving</code></li>
+        <li>Sla het bestand op</li>
+        <li>Herstart de server</li>
+    </ol>
+
+    <div class="note">
+        <p><strong>Opmerking:</strong> De server moet opnieuw worden opgestart om nieuwe streams te laden.</p>
+    </div>
+
+    <h2>Technische details</h2>
+    
+    <h3>Backend</h3>
+    <p>
+        De backend is gebouwd met Node.js en gebruikt de volgende belangrijke componenten:
+    </p>
+    <ul>
+        <li><code>express</code>: Voor de webserver en API endpoints</li>
+        <li><code>icecast-parser</code>: Voor het extraheren van metadata uit radio streams</li>
+        <li><code>spotify-web-api-node</code>: Voor het ophalen van album covers</li>
+        <li><code>sqlite3</code>: Voor het opslaan van de afspeelgeschiedenis</li>
+        <li><code>socket.io</code>: Voor real-time updates naar de frontend</li>
+    </ul>
+
+    <h3>Frontend</h3>
+    <p>
+        De frontend is gebouwd met HTML, CSS en JavaScript en communiceert met de backend via:
+    </p>
+    <ul>
+        <li>RESTful API calls voor het ophalen van stations, metadata en geschiedenis</li>
+        <li>WebSockets (Socket.io) voor real-time updates</li>
+    </ul>
+
+    <h3>Database</h3>
+    <p>
+        De afspeelgeschiedenis wordt opgeslagen in een SQLite database met de volgende structuur:
+    </p>
+    <pre>
+CREATE TABLE history (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  station TEXT NOT NULL,
+  artist TEXT NOT NULL,
+  title TEXT NOT NULL,
+  timestamp TEXT NOT NULL,
+  albumArt TEXT
+)</pre>
+
+    <h2>Probleemoplossing</h2>
+    
+    <h3>Geen metadata zichtbaar</h3>
+    <p>
+        Als er geen metadata wordt getoond:
+    </p>
+    <ul>
+        <li>Controleer of de stream URL nog geldig is</li>
+        <li>Controleer of de stream metadata bevat (niet alle streams doen dit)</li>
+        <li>Klik op de "Ververs Metadata" knop</li>
+    </ul>
+
+    <h3>Geen album covers</h3>
+    <p>
+        Als er geen album covers worden getoond:
+    </p>
+    <ul>
+        <li>Controleer of de Spotify API credentials geldig zijn</li>
+        <li>Controleer of de artiest en titel correct worden geëxtraheerd</li>
+        <li>Sommige nummers zijn mogelijk niet beschikbaar op Spotify</li>
+    </ul>
+
+    <h3>Stream speelt niet af</h3>
+    <p>
+        Als een stream niet afspeelt:
+    </p>
+    <ul>
+        <li>Controleer of de stream URL nog geldig is</li>
+        <li>Probeer de pagina te verversen</li>
+        <li>Controleer of je browser audio streams ondersteunt</li>
+    </ul>
+
+    <h2>Toekomstige verbeteringen</h2>
+    <p>
+        Mogelijke verbeteringen voor toekomstige versies:
+    </p>
+    <ul>
+        <li>Gebruikersaccounts en persoonlijke favorieten</li>
+        <li>Exporteren van afspeelgeschiedenis naar CSV of andere formaten</li>
+        <li>Automatische detectie van stream URLs</li>
+        <li>Verbeterde zoekfunctionaliteit in de geschiedenis</li>
+        <li>Integratie met meer muziekdiensten naast Spotify</li>
+    </ul>
+</body>
+</html>
